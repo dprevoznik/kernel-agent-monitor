@@ -33,17 +33,6 @@ export async function POST(req: Request) {
     tools,
     stopWhen: stepCountIs(40),
     messages: await convertToModelMessages(messages),
-    onStepFinish: ({ toolResults }) => {
-      // Temporary: surface the exact Kernel tool-result shape so we can confirm
-      // the live-view field name. Captured in the server logs.
-      for (const r of toolResults ?? []) {
-        console.log(
-          '[v0] tool result',
-          r.toolName,
-          JSON.stringify(r.output ?? r).slice(0, 800),
-        )
-      }
-    },
     // Close the MCP client once the whole run (including tool calls) is done.
     onFinish: async () => {
       await mcpClient.close().catch(() => {})

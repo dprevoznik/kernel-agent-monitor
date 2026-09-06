@@ -57,23 +57,28 @@ function stringify(value: unknown): string {
 }
 
 /**
- * Kernel's embeddable live view is served from `*.onkernel.com` (port 8443)
- * and carries its own signed token. The REST API host (e.g. `api.onkernel.com`
- * or a bare `/browsers/{id}` endpoint) is NOT embeddable — loading it in an
- * iframe returns `{"code":"invalid_request","message":"Missing JWT token"}`.
- * So we accept ONLY a labeled live-view field or a URL that has the live-view
- * shape, and explicitly reject the API surface.
+ * Kernel returns a browser result like:
+ *   { base_url: "https://prod-jfk-hypeman-8.kernel.sh:8443/browser/kernel",
+ *     browser_live_view_url: "https://….kernel.sh:8443/browser/live/<token>",
+ *     cdp_ws_url: "wss://…" }
+ * Only `browser_live_view_url` (the `/browser/live/<token>` surface) is
+ * embeddable. `base_url` looks similar (same host + :8443) but is the API and
+ * returns `{"code":"invalid_request","message":"Missing JWT token"}` in an
+ * iframe — so we must pick the live field specifically, never just any :8443
+ * URL. Tool results arrive JSON-escaped, so we unescape before matching.
  */
 function extractLiveView(output: unknown): string | null {
   const s = stringify(output)
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, ' ')
 
-  // 1) An explicitly labeled live-view field, in any casing / key variant.
+  // 1) The explicitly labeled live-view field — the only reliable source.
   const labeled = s.match(
     /(?:browser_)?live[_-]?view[_-]?url["']?\s*[:=]\s*["']?(https?:\/\/[^\s"'\\)]+)/i,
   )
   if (labeled && isLiveViewUrl(labeled[1])) return withReadOnly(cleanUrl(labeled[1]))
 
-  // 2) Otherwise, the first URL that has the live-view shape (never the API).
+  // 2) Fallback: a URL with the live-view *path* shape (never base_url / api).
   const urls = [...s.matchAll(/https?:\/\/[^\s"'\\)]+/gi)].map((m) => cleanUrl(m[0]))
   const live = urls.find(isLiveViewUrl)
   return live ? withReadOnly(live) : null
@@ -86,15 +91,12 @@ function isLiveViewUrl(raw: string): boolean {
   } catch {
     return false
   }
-  // Must be a Kernel host, but never the REST API host.
-  if (!/onkernel\.com$/i.test(url.hostname)) return false
+  // Live view is served from `*.kernel.sh` / `*.onkernel.com`, never the API.
+  if (!/(?:^|\.)(?:kernel\.sh|onkernel\.com)$/i.test(url.hostname)) return false
   if (/^api\./i.test(url.hostname)) return false
-  // The live view runs on :8443 or exposes a live/view path or a token.
-  return (
-    url.port === '8443' ||
-    /(live|view)/i.test(url.pathname) ||
-    url.searchParams.has('token')
-  )
+  // Require the live-view surface specifically: a `/…/live/…` path or a token
+  // param. This excludes `base_url` (`/browser/kernel`) that returns a JWT error.
+  return /\/live(\/|$)/i.test(url.pathname) || url.searchParams.has('token')
 }
 
 function withReadOnly(raw: string): string {
