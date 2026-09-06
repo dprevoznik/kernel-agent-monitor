@@ -1,6 +1,6 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import { Loader2, ExternalLink } from 'lucide-react'
 import { KernelMark } from '@/components/kernel-logo'
 
 export type BrowserStatus = 'idle' | 'starting' | 'live'
@@ -37,6 +37,18 @@ export function BrowserFrame({
             <span className="hidden truncate font-mono text-[10px] text-muted-foreground/60 sm:inline">
               {sessionId.slice(0, 12)}
             </span>
+          )}
+          {liveViewUrl && (
+            <a
+              href={liveViewUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 font-mono text-[10px] text-muted-foreground transition-colors hover:text-primary"
+              title="Open the live browser view in a new tab"
+            >
+              <ExternalLink className="size-3" />
+              <span className="hidden sm:inline">open</span>
+            </a>
           )}
           <StatusPill status={status} />
         </div>

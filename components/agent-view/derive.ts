@@ -58,12 +58,25 @@ function stringify(value: unknown): string {
 
 function extractLiveView(output: unknown): string | null {
   const s = stringify(output)
+
+  // 1) An explicitly labeled live-view field, in any casing / key variant.
   const labeled = s.match(
-    /browser_live_view_url["']?\s*[:=]\s*["']?(https?:\/\/[^\s"'\\)]+)/i,
+    /(?:browser_)?live[_-]?view(?:_url)?["']?\s*[:=]\s*["']?(https?:\/\/[^\s"'\\)]+)/i,
   )
-  if (labeled) return labeled[1]
-  const anyKernel = s.match(/(https?:\/\/[^\s"'\\)]*onkernel[^\s"'\\)]*)/i)
-  return anyKernel ? anyKernel[1] : null
+  if (labeled) return cleanUrl(labeled[1])
+
+  // 2) Any Kernel-hosted URL that looks like a live view / devtools surface.
+  const urls = [...s.matchAll(/https?:\/\/[^\s"'\\)]+/gi)].map((m) => m[0])
+  const kernelLive = urls.find(
+    (u) => /kernel/i.test(u) && /(live|view|devtools|session|browser)/i.test(u),
+  )
+  if (kernelLive) return cleanUrl(kernelLive)
+  const anyKernel = urls.find((u) => /(onkernel|kernel\.sh|\.kernel\.)/i.test(u))
+  return anyKernel ? cleanUrl(anyKernel) : null
+}
+
+function cleanUrl(u: string): string {
+  return u.replace(/[)\]},.'"]+$/, '')
 }
 
 function extractSessionId(output: unknown): string | null {
@@ -155,7 +168,13 @@ export function deriveFromMessages(messages: UIMessage[]): DerivedState {
         toolCalls.push(item)
         actions.push(item)
 
-        if (item.kind === 'session' && output) {
+        // The live-view URL can surface from ANY Kernel tool result (the
+        // browser may be created by manage_browsers OR auto-provisioned by the
+        // first execute_playwright_code call), so scan every output.
+        if (output) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('[v0] tool output', toolName, stringify(output).slice(0, 600))
+          }
           liveViewUrl = extractLiveView(output) ?? liveViewUrl
           sessionId = extractSessionId(output) ?? sessionId
         }
