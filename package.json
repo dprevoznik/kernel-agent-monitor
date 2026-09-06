@@ -8,8 +8,14 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^4.0.75",
+    "@ai-sdk/mcp": "^2.0.45",
+    "@ai-sdk/react": "^4.0.96",
     "@base-ui/react": "^1.5.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@vercel/analytics": "1.6.1",
+    "@vercel/connect": "^2.0.2",
+    "ai": "^7.0.93",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
