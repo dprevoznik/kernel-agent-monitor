@@ -56,23 +56,56 @@ function stringify(value: unknown): string {
   }
 }
 
+/**
+ * Kernel's embeddable live view is served from `*.onkernel.com` (port 8443)
+ * and carries its own signed token. The REST API host (e.g. `api.onkernel.com`
+ * or a bare `/browsers/{id}` endpoint) is NOT embeddable — loading it in an
+ * iframe returns `{"code":"invalid_request","message":"Missing JWT token"}`.
+ * So we accept ONLY a labeled live-view field or a URL that has the live-view
+ * shape, and explicitly reject the API surface.
+ */
 function extractLiveView(output: unknown): string | null {
   const s = stringify(output)
 
   // 1) An explicitly labeled live-view field, in any casing / key variant.
   const labeled = s.match(
-    /(?:browser_)?live[_-]?view(?:_url)?["']?\s*[:=]\s*["']?(https?:\/\/[^\s"'\\)]+)/i,
+    /(?:browser_)?live[_-]?view[_-]?url["']?\s*[:=]\s*["']?(https?:\/\/[^\s"'\\)]+)/i,
   )
-  if (labeled) return cleanUrl(labeled[1])
+  if (labeled && isLiveViewUrl(labeled[1])) return withReadOnly(cleanUrl(labeled[1]))
 
-  // 2) Any Kernel-hosted URL that looks like a live view / devtools surface.
-  const urls = [...s.matchAll(/https?:\/\/[^\s"'\\)]+/gi)].map((m) => m[0])
-  const kernelLive = urls.find(
-    (u) => /kernel/i.test(u) && /(live|view|devtools|session|browser)/i.test(u),
+  // 2) Otherwise, the first URL that has the live-view shape (never the API).
+  const urls = [...s.matchAll(/https?:\/\/[^\s"'\\)]+/gi)].map((m) => cleanUrl(m[0]))
+  const live = urls.find(isLiveViewUrl)
+  return live ? withReadOnly(live) : null
+}
+
+function isLiveViewUrl(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(cleanUrl(raw))
+  } catch {
+    return false
+  }
+  // Must be a Kernel host, but never the REST API host.
+  if (!/onkernel\.com$/i.test(url.hostname)) return false
+  if (/^api\./i.test(url.hostname)) return false
+  // The live view runs on :8443 or exposes a live/view path or a token.
+  return (
+    url.port === '8443' ||
+    /(live|view)/i.test(url.pathname) ||
+    url.searchParams.has('token')
   )
-  if (kernelLive) return cleanUrl(kernelLive)
-  const anyKernel = urls.find((u) => /(onkernel|kernel\.sh|\.kernel\.)/i.test(u))
-  return anyKernel ? cleanUrl(anyKernel) : null
+}
+
+function withReadOnly(raw: string): string {
+  try {
+    const url = new URL(raw)
+    // Disable visitor interaction — this is a read-only observation surface.
+    url.searchParams.set('readOnly', 'true')
+    return url.toString()
+  } catch {
+    return raw
+  }
 }
 
 function cleanUrl(u: string): string {
@@ -168,14 +201,11 @@ export function deriveFromMessages(messages: UIMessage[]): DerivedState {
         toolCalls.push(item)
         actions.push(item)
 
-        // The live-view URL can surface from ANY Kernel tool result (the
-        // browser may be created by manage_browsers OR auto-provisioned by the
-        // first execute_playwright_code call), so scan every output.
+        // The live-view URL can surface from ANY Kernel tool result, but the
+        // session's live view is stable for its lifetime — so lock it in on the
+        // first valid hit and never let a later result overwrite it.
         if (output) {
-          if (process.env.NODE_ENV !== 'production') {
-            console.log('[v0] tool output', toolName, stringify(output).slice(0, 600))
-          }
-          liveViewUrl = extractLiveView(output) ?? liveViewUrl
+          if (!liveViewUrl) liveViewUrl = extractLiveView(output)
           sessionId = extractSessionId(output) ?? sessionId
         }
         if (item.kind === 'playwright') {
