@@ -12,6 +12,9 @@ export type ToolCallItem = {
   errorText?: string
   /** model's stated intent (assistant text right before the call) */
   intent?: string
+  /** for kind "skill": where its instructions came from */
+  skillSource?: 'local' | 'remote'
+  skillSourceUrl?: string
 }
 
 export type ReasoningItem = {
@@ -196,15 +199,20 @@ export function deriveFromMessages(messages: UIMessage[]): DerivedState {
         const input = part.input
         const output = part.output
         const errorText = part.errorText as string | undefined
+        const kind = classify(toolName)
+        const skillOutput =
+          kind === 'skill' ? (output as { source?: string; sourceUrl?: string } | undefined) : undefined
         const item: ToolCallItem = {
           key,
           toolName,
-          kind: classify(toolName),
+          kind,
           phase: phaseFromState(state),
           input,
           output,
           errorText,
           intent: lastText,
+          skillSource: skillOutput?.source as 'local' | 'remote' | undefined,
+          skillSourceUrl: skillOutput?.sourceUrl,
         }
         toolCalls.push(item)
         actions.push(item)

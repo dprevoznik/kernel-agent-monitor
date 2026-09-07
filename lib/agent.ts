@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { createMCPClient } from '@ai-sdk/mcp'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { createGateway } from '@ai-sdk/gateway'
-import { listSkillsCatalog, readSkillContent } from '@/lib/skills'
+import { listSkillsCatalog, readSkill } from '@/lib/skills'
 
 /** Kernel's hosted MCP server (Streamable HTTP). Its tools are the agent's only
  * way to touch the web: `manage_browsers` (create/delete cloud browser sessions)
@@ -22,7 +22,11 @@ export const DEFAULT_MODEL = 'anthropic/claude-sonnet-5'
  */
 export async function buildSystemPrompt(): Promise<string> {
   const catalog = (await listSkillsCatalog())
-    .map((s) => `- "${s.name}": ${s.description}`)
+    .map((s) =>
+      s.source === 'remote'
+        ? `- "${s.name}" (fetched live from ${s.sourceUrl}): ${s.description}`
+        : `- "${s.name}": ${s.description}`,
+    )
     .join('\n')
 
   return `You are Agent View, an autonomous web agent.
@@ -33,14 +37,25 @@ ${catalog}
 Never claim to have done something you did not verify in the browser.`
 }
 
-/** Lets the agent pull a skill's full instructions into context on demand. */
+/** Lets the agent pull a skill's full instructions into context on demand.
+ *  Remote skills are re-fetched from their source URL on every call (subject
+ *  to a short cache) — nothing is baked into this repo or the model weights. */
 export const skillTools = {
   read_skill: tool({
     description: "Load a named skill's full instructions before using its capability.",
     inputSchema: z.object({
       name: z.string().describe('The skill name, exactly as listed in the system prompt.'),
     }),
-    execute: async ({ name }) => (await readSkillContent(name)) ?? `No skill named "${name}" was found.`,
+    execute: async ({ name }) => {
+      const skill = await readSkill(name)
+      if (!skill) return { error: `No skill named "${name}" was found.` }
+      return {
+        name: skill.name,
+        source: skill.source,
+        sourceUrl: skill.sourceUrl,
+        instructions: skill.body,
+      }
+    },
   }),
 }
 

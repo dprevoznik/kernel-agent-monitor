@@ -28,19 +28,24 @@ const REMOTE_SKILLS = [
 export interface SkillMeta {
   name: string
   description: string
+  /** Where this skill's instructions live — surfaced in the UI so a remote
+   *  fetch (no local copy, read live from the source every time) is visibly
+   *  distinct from a skill shipped in this repo. */
+  source: 'local' | 'remote'
+  sourceUrl?: string
 }
 
-interface ParsedSkill extends SkillMeta {
+export interface ParsedSkill extends SkillMeta {
   body: string
 }
 
-function parseSkillFile(raw: string): ParsedSkill {
+function parseSkillFile(raw: string, meta: { source: SkillMeta['source']; sourceUrl?: string }): ParsedSkill {
   const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/)
-  if (!match) return { name: 'unknown', description: '', body: raw.trim() }
+  if (!match) return { name: 'unknown', description: '', body: raw.trim(), ...meta }
   const [, frontmatter, body] = match
   const name = frontmatter.match(/^name:\s*(.+)$/m)?.[1]?.trim() ?? 'unknown'
   const description = frontmatter.match(/^description:\s*(.+)$/m)?.[1]?.trim() ?? ''
-  return { name, description, body: body.trim() }
+  return { name, description, body: body.trim(), ...meta }
 }
 
 /** Rewrite a GitHub "blob" page URL into its raw-content equivalent. */
@@ -51,7 +56,9 @@ function toRawUrl(url: string): string {
 
 function loadLocalSkills(): ParsedSkill[] {
   const dirs = readdirSync(SKILLS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory())
-  return dirs.map((dir) => parseSkillFile(readFileSync(path.join(SKILLS_DIR, dir.name, 'SKILL.md'), 'utf-8')))
+  return dirs.map((dir) =>
+    parseSkillFile(readFileSync(path.join(SKILLS_DIR, dir.name, 'SKILL.md'), 'utf-8'), { source: 'local' }),
+  )
 }
 
 /**
@@ -66,7 +73,7 @@ async function loadRemoteSkills(): Promise<ParsedSkill[]> {
       try {
         const res = await fetch(toRawUrl(url), { next: { revalidate: 300 } })
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-        return parseSkillFile(await res.text())
+        return parseSkillFile(await res.text(), { source: 'remote', sourceUrl: url })
       } catch (error) {
         console.log('[v0] failed to load remote skill', url, error)
         return null
@@ -81,12 +88,19 @@ async function loadAllSkills(): Promise<ParsedSkill[]> {
   return [...local, ...remote]
 }
 
-/** Name + description of every skill, for the system prompt's catalog. */
+/** Metadata for every skill (name, description, and where it's sourced from),
+ *  for the system prompt's catalog and the UI's skills strip. */
 export async function listSkillsCatalog(): Promise<SkillMeta[]> {
-  return (await loadAllSkills()).map(({ name, description }) => ({ name, description }))
+  return (await loadAllSkills()).map(({ name, description, source, sourceUrl }) => ({
+    name,
+    description,
+    source,
+    sourceUrl,
+  }))
 }
 
-/** The full instructions for one skill, loaded on demand by the agent. */
-export async function readSkillContent(name: string): Promise<string | null> {
-  return (await loadAllSkills()).find((s) => s.name === name)?.body ?? null
+/** The full skill — instructions plus source metadata — loaded on demand by
+ *  the agent via the `read_skill` tool. */
+export async function readSkill(name: string): Promise<ParsedSkill | null> {
+  return (await loadAllSkills()).find((s) => s.name === name) ?? null
 }

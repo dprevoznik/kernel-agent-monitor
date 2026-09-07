@@ -1,6 +1,6 @@
 'use client'
 
-import { Terminal, Loader2, Check, TriangleAlert } from 'lucide-react'
+import { Terminal, Loader2, Check, TriangleAlert, ExternalLink } from 'lucide-react'
 import { FeedShell } from './feed-shell'
 import type { ToolCallItem } from './derive'
 
@@ -35,20 +35,25 @@ function formatValue(value: unknown): string {
 function TagLine({ item }: { item: ToolCallItem }) {
   const isPlaywright = item.kind === 'playwright'
   const isSkill = item.kind === 'skill'
+  const isRemoteSkill = isSkill && item.skillSource === 'remote'
   const label = isPlaywright
     ? 'Playwright execution'
-    : isSkill
-      ? 'Skill lookup'
-      : 'Kernel session control'
+    : isRemoteSkill
+      ? 'Remote skill · fetched live'
+      : isSkill
+        ? 'Local skill'
+        : 'Kernel session control'
   return (
     <div className="flex items-center gap-2">
       <span
         className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide ${
           isPlaywright
             ? 'bg-primary/15 text-primary'
-            : isSkill
-              ? 'bg-accent text-accent-foreground'
-              : 'bg-secondary text-secondary-foreground'
+            : isRemoteSkill
+              ? 'animate-pulse bg-primary text-primary-foreground'
+              : isSkill
+                ? 'bg-accent text-accent-foreground'
+                : 'bg-secondary text-secondary-foreground'
         }`}
       >
         {label}
@@ -94,15 +99,29 @@ export function ToolCallsFeed({
             item.kind === 'playwright'
               ? null
               : formatValue(item.input)
+          const isRemoteSkill = item.kind === 'skill' && item.skillSource === 'remote'
           return (
             <li
               key={item.key}
-              className="overflow-hidden rounded-lg border border-border/70 bg-[#0c0e08]"
+              className={`overflow-hidden rounded-lg border bg-[#0c0e08] ${
+                isRemoteSkill ? 'border-primary/50' : 'border-border/70'
+              }`}
             >
               <div className="border-b border-border/60 px-2.5 py-1.5">
                 <TagLine item={item} />
               </div>
               <div className="flex flex-col gap-2 p-2.5">
+                {isRemoteSkill && item.skillSourceUrl && (
+                  <a
+                    href={item.skillSourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 truncate rounded bg-primary/10 px-2 py-1 font-mono text-[11px] text-primary hover:underline"
+                  >
+                    <ExternalLink className="size-3 shrink-0" />
+                    <span className="truncate">{item.skillSourceUrl}</span>
+                  </a>
+                )}
                 {code && (
                   <div>
                     <p className="mb-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/70">

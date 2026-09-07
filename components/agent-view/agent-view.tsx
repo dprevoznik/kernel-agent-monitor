@@ -14,6 +14,7 @@ import { ReasoningFeed } from './reasoning-feed'
 import { ActionsFeed } from './actions-feed'
 import { ToolCallsFeed } from './tool-calls-feed'
 import { ActiveSitePanel } from './active-site-panel'
+import { SkillsStrip } from './skills-strip'
 
 type MobileTab = 'reasoning' | 'actions' | 'tools' | 'site'
 
@@ -109,6 +110,7 @@ export function AgentView() {
           status={chatStatus}
           hasSession={hasSession}
         />
+        <SkillsStrip className="mt-2.5" />
       </div>
 
       {/* content */}
