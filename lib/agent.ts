@@ -1,7 +1,10 @@
 import 'server-only'
+import { tool } from 'ai'
+import { z } from 'zod'
 import { createMCPClient } from '@ai-sdk/mcp'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { createGateway } from '@ai-sdk/gateway'
+import { listSkillsCatalog, readSkillContent } from '@/lib/skills'
 
 /** Kernel's hosted MCP server (Streamable HTTP). Its tools are the agent's only
  * way to touch the web: `manage_browsers` (create/delete cloud browser sessions)
@@ -11,19 +14,35 @@ export const KERNEL_MCP_URL = 'https://mcp.onkernel.com/mcp'
 /** Newest Claude Sonnet available on the AI Gateway. */
 export const DEFAULT_MODEL = 'anthropic/claude-sonnet-5'
 
-export const SYSTEM_PROMPT = `You are Agent View, an autonomous web agent. You control exactly one real, remote Chromium browser running in the cloud on Kernel. That browser is the ONLY way you can affect the web — you cannot browse or fetch any other way.
+/**
+ * The system prompt stays tiny: an identity plus a catalog of skills the
+ * agent can load on demand — instead of one long hardcoded instruction blob.
+ * Full instructions live as markdown in `skills/<name>/SKILL.md` and only
+ * enter context via the `read_skill` tool when the agent actually needs them.
+ */
+export function buildSystemPrompt(): string {
+  const catalog = listSkillsCatalog()
+    .map((s) => `- "${s.name}": ${s.description}`)
+    .join('\n')
 
-You control the browser through these Kernel MCP tools:
-- "manage_browsers": create or delete a browser session. To start, call it with action "create". It returns a session id and a live-view URL that the human is watching.
-- "execute_playwright_code": run Playwright JavaScript inside an existing session. The code runs in the same VM as the browser with "page", "context" and "browser" already in scope. You can "return" a JSON-serializable value. Example: await page.goto('https://example.com'); return await page.title();
+  return `You are Agent View, an autonomous web agent.
 
-Rules:
-1. If there is no active browser session yet in this conversation, your FIRST action must be "manage_browsers" with action "create". Reuse the same session id for every later step in the conversation — do not create extra sessions.
-2. Before EACH tool call, write ONE short sentence stating your immediate intent (e.g. "Searching Google for flights to Tokyo."). This narration is shown to the human as your reasoning, so keep it clear and specific.
-3. Work the user's goal step by step with small, single-purpose Playwright snippets. Prefer resilient selectors (getByRole, getByText, placeholders). Read the returned value/error and self-correct on the next step.
-4. After navigations or clicks, wait for the page to settle (e.g. page.waitForLoadState('domcontentloaded')) and, when useful, return the current URL and page title so progress is visible.
-5. When the goal is achieved — or if you are truly stuck after several failed attempts — stop calling tools and write a concise final summary of what you found or did. Do not delete the session yourself; teardown is handled separately.
-6. Never claim to have done something you did not verify in the browser.`
+Before your first tool call, call "read_skill" with the skill that matches your task and follow its instructions exactly. Available skills:
+${catalog}
+
+Never claim to have done something you did not verify in the browser.`
+}
+
+/** Lets the agent pull a skill's full instructions into context on demand. */
+export const skillTools = {
+  read_skill: tool({
+    description: "Load a named skill's full instructions before using its capability.",
+    inputSchema: z.object({
+      name: z.string().describe('The skill name, exactly as listed in the system prompt.'),
+    }),
+    execute: async ({ name }) => readSkillContent(name) ?? `No skill named "${name}" was found.`,
+  }),
+}
 
 /**
  * Build a Kernel MCP client authorized with THIS visitor's Kernel token.

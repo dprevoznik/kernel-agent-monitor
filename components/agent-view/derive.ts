@@ -5,7 +5,7 @@ export type ToolPhase = 'running' | 'done' | 'error'
 export type ToolCallItem = {
   key: string
   toolName: string
-  kind: 'playwright' | 'session' | 'other'
+  kind: 'playwright' | 'session' | 'skill' | 'other'
   phase: ToolPhase
   input: unknown
   output: unknown
@@ -33,10 +33,12 @@ export type DerivedState = {
 
 const PLAYWRIGHT_TOOL = 'execute_playwright_code'
 const SESSION_TOOL = 'manage_browsers'
+const SKILL_TOOL = 'read_skill'
 
 function classify(toolName: string): ToolCallItem['kind'] {
   if (toolName === PLAYWRIGHT_TOOL) return 'playwright'
   if (toolName === SESSION_TOOL) return 'session'
+  if (toolName === SKILL_TOOL) return 'skill'
   return 'other'
 }
 
@@ -184,8 +186,12 @@ export function deriveFromMessages(messages: UIMessage[]): DerivedState {
         return
       }
 
-      if (type === 'dynamic-tool') {
-        const toolName = (part.toolName as string) ?? 'tool'
+      // Kernel's MCP tools arrive as `dynamic-tool` (input/output types
+      // unknown to the SDK). Statically-declared tools like `read_skill`
+      // arrive as `tool-<name>` instead, with the name embedded in the type.
+      const isStaticTool = type.startsWith('tool-')
+      if (type === 'dynamic-tool' || isStaticTool) {
+        const toolName = isStaticTool ? type.slice('tool-'.length) : ((part.toolName as string) ?? 'tool')
         const state = part.state as string | undefined
         const input = part.input
         const output = part.output

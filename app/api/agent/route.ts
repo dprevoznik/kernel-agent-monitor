@@ -2,7 +2,7 @@ import { convertToModelMessages, streamText, stepCountIs, type UIMessage } from 
 import { getOrCreateVisitorId } from '@/lib/visitor'
 import { getVisitorToken } from '@/lib/connect'
 import { getStoredTeam } from '@/lib/gateway-team'
-import { createKernelMcpClient, buildModel, SYSTEM_PROMPT } from '@/lib/agent'
+import { createKernelMcpClient, buildModel, buildSystemPrompt, skillTools } from '@/lib/agent'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -25,12 +25,12 @@ export async function POST(req: Request) {
 
   // Per-request Kernel MCP client, authorized with THIS visitor's token.
   const mcpClient = await createKernelMcpClient(kernelToken)
-  const tools = await mcpClient.tools()
+  const mcpTools = await mcpClient.tools()
 
   const result = streamText({
     model: buildModel(gatewayToken, teamIdOrSlug),
-    system: SYSTEM_PROMPT,
-    tools,
+    system: buildSystemPrompt(),
+    tools: { ...mcpTools, ...skillTools },
     stopWhen: stepCountIs(40),
     messages: await convertToModelMessages(messages),
     // Close the MCP client once the whole run (including tool calls) is done.

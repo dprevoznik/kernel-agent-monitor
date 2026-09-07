@@ -1,10 +1,14 @@
 'use client'
 
-import { ListChecks, Loader2, Check, TriangleAlert, Globe, Code2 } from 'lucide-react'
+import { ListChecks, Loader2, Check, TriangleAlert, Globe, Code2, BookOpen } from 'lucide-react'
 import { FeedShell } from './feed-shell'
 import type { ToolCallItem } from './derive'
 
 function actionLabel(item: ToolCallItem): string {
+  if (item.kind === 'skill') {
+    const name = (item.input as { name?: string } | undefined)?.name
+    return name ? `Loaded skill: ${name}` : 'Loaded a skill'
+  }
   if (item.intent) return item.intent
   if (item.kind === 'playwright') return 'Ran a Playwright step'
   if (item.kind === 'session') {
@@ -57,6 +61,8 @@ export function ActionsFeed({
               <p className="mt-0.5 flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
                 {item.kind === 'playwright' ? (
                   <Code2 className="size-3" />
+                ) : item.kind === 'skill' ? (
+                  <BookOpen className="size-3" />
                 ) : (
                   <Globe className="size-3" />
                 )}
@@ -64,7 +70,9 @@ export function ActionsFeed({
                   ? 'playwright'
                   : item.kind === 'session'
                     ? 'session'
-                    : item.toolName}
+                    : item.kind === 'skill'
+                      ? 'skill'
+                      : item.toolName}
                 <span className="text-muted-foreground/50">· #{i + 1}</span>
               </p>
             </div>

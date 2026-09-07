@@ -34,16 +34,24 @@ function formatValue(value: unknown): string {
 
 function TagLine({ item }: { item: ToolCallItem }) {
   const isPlaywright = item.kind === 'playwright'
+  const isSkill = item.kind === 'skill'
+  const label = isPlaywright
+    ? 'Playwright execution'
+    : isSkill
+      ? 'Skill lookup'
+      : 'Kernel session control'
   return (
     <div className="flex items-center gap-2">
       <span
         className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide ${
           isPlaywright
             ? 'bg-primary/15 text-primary'
-            : 'bg-secondary text-secondary-foreground'
+            : isSkill
+              ? 'bg-accent text-accent-foreground'
+              : 'bg-secondary text-secondary-foreground'
         }`}
       >
-        {isPlaywright ? 'Playwright execution' : 'Kernel session control'}
+        {label}
       </span>
       <span className="truncate font-mono text-[11px] text-muted-foreground">
         {item.toolName}

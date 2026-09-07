@@ -6,6 +6,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // The agent route reads `skills/**/SKILL.md` from disk at runtime (not via
+  // `import`), so it must be explicitly traced into the deployed function.
+  outputFileTracingIncludes: {
+    '/api/agent': ['./skills/**/*'],
+  },
   async headers() {
     return [
       {
