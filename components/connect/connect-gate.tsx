@@ -3,6 +3,7 @@
 import { Globe, Zap, Loader2, KeyRound, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { KernelWordmark } from '@/components/kernel-logo'
+import { SkillsStrip } from '@/components/agent-view/skills-strip'
 import { useConnect } from './connect-context'
 import { ConnectorRow } from './connector-row'
 
@@ -31,6 +32,7 @@ export function ConnectGate() {
             <span className="text-foreground">your own</span> Kernel and AI Gateway —
             no shared keys, nothing billed to anyone but you.
           </p>
+          <SkillsStrip className="mt-4 justify-center" />
         </div>
 
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-card/40 px-3 py-2 text-xs text-muted-foreground">
