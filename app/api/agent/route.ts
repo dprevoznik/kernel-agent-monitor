@@ -24,12 +24,15 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json()
 
   // Per-request Kernel MCP client, authorized with THIS visitor's token.
-  const mcpClient = await createKernelMcpClient(kernelToken)
+  const [mcpClient, system] = await Promise.all([
+    createKernelMcpClient(kernelToken),
+    buildSystemPrompt(),
+  ])
   const mcpTools = await mcpClient.tools()
 
   const result = streamText({
     model: buildModel(gatewayToken, teamIdOrSlug),
-    system: buildSystemPrompt(),
+    system,
     tools: { ...mcpTools, ...skillTools },
     stopWhen: stepCountIs(40),
     messages: await convertToModelMessages(messages),

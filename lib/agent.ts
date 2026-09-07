@@ -20,8 +20,8 @@ export const DEFAULT_MODEL = 'anthropic/claude-sonnet-5'
  * Full instructions live as markdown in `skills/<name>/SKILL.md` and only
  * enter context via the `read_skill` tool when the agent actually needs them.
  */
-export function buildSystemPrompt(): string {
-  const catalog = listSkillsCatalog()
+export async function buildSystemPrompt(): Promise<string> {
+  const catalog = (await listSkillsCatalog())
     .map((s) => `- "${s.name}": ${s.description}`)
     .join('\n')
 
@@ -40,7 +40,7 @@ export const skillTools = {
     inputSchema: z.object({
       name: z.string().describe('The skill name, exactly as listed in the system prompt.'),
     }),
-    execute: async ({ name }) => readSkillContent(name) ?? `No skill named "${name}" was found.`,
+    execute: async ({ name }) => (await readSkillContent(name)) ?? `No skill named "${name}" was found.`,
   }),
 }
 
